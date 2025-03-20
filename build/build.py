@@ -1,10 +1,13 @@
+import logging
 import shutil
 from dataclasses import dataclass
-from pathlib import Path
 from functools import cached_property
+from pathlib import Path
 
 import mistune
 from jinja2 import Template
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class _BuildContext:
@@ -94,6 +97,7 @@ def _write_html(path: Path, content: str) -> None:
 
 
 def _gen_index_html(ctx: _BuildContext) -> None:
+    logger.info(f"Generating {ctx.index_md_path} -> {ctx.dist_index_path}")
     md_content = _read_md(ctx.index_md_path)
     html_content = mistune.html(md_content)
     page = ctx.base_template.render(
@@ -107,11 +111,15 @@ def build() -> None:
     root_path = Path(".").resolve()
     _assert_project_root(root_path)
 
+    logger.info(f"Starting build from {root_path}")
+
     ctx = _BuildContext(root_path)
 
+    logger.info(f"Setting up dist dir at {ctx.dist_path}")
     _clean_dist(ctx)
     _ensure_dir(ctx.dist_path)
     _ensure_dir(ctx.dist_css_path)
     _copy_stylesheet(ctx)
 
+    logger.info("Generating pages")
     _gen_index_html(ctx)
