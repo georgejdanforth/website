@@ -1,5 +1,5 @@
 import logging
-import time
+import http.server
 from multiprocessing import Lock, Process
 from multiprocessing.synchronize import Lock as LockType
 from pathlib import Path
@@ -39,15 +39,30 @@ def _start_pages_watcher(lock: LockType) -> Process:
     return process
 
 
-def run() -> None:
+def _create_server(directory: Path, port: int = 8000) -> http.server.HTTPServer:
+    """Create an HTTP server for serving files from the specified directory."""
+    # Create a handler class that serves from the specified directory
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(directory), **kwargs)
+
+    # Create and return the server
+    return http.server.HTTPServer(("localhost", port), Handler)
+
+
+def run(port: int) -> None:
     build()
 
     lock = Lock()
     build_watcher = _start_build_watcher(lock)
     pages_watcher = _start_pages_watcher(lock)
+
+    dist_path = Path("dist").resolve()
+    server = _create_server(dist_path, port)
+
     try:
-        while True:
-            time.sleep(1)
+        logger.info("Starting server on http://localhost:%d", port)
+        server.serve_forever()
     except KeyboardInterrupt:
         build_watcher.join()
         pages_watcher.join()

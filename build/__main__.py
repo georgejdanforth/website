@@ -19,8 +19,9 @@ def build():
 
 
 @cli.command()
-def serve():
-    run()
+@click.option("--port", default=8000, help="Port to serve on")
+def serve(port: int):
+    run(port)
 
 
 if __name__ == "__main__":
