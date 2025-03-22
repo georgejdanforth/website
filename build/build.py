@@ -1,17 +1,32 @@
 import logging
 import shutil
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cached_property, wraps
+from hashlib import sha256
 from pathlib import Path
+from typing import Any, Callable, Protocol, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from _typeshed import ReadableBuffer
+else:
+    ReadableBuffer = Any
 
 import mistune
 from jinja2 import Template
 
 logger = logging.getLogger(__name__)
 
+
+class Hash(Protocol):
+    def update(self, data: ReadableBuffer, /) -> None: ...
+    def hexdigest(self) -> str: ...
+
+
 @dataclass
 class _BuildContext:
     root_path: Path
+    # Use Any here since _Hash is not available at runtime
+    build_sha: Hash
 
     @cached_property
     def build_path(self) -> Path:
@@ -53,6 +68,16 @@ class _BuildContext:
     def base_template(self) -> Template:
         with open(self.template_path) as f:
             return Template(f.read())
+
+    @cached_property
+    def sha_path(self) -> Path:
+        return self.dist_path / "sha256.txt"
+
+    def get_sha(self) -> str:
+        return self.build_sha.hexdigest()
+
+    def update_sha(self, data: bytes) -> None:
+        self.build_sha.update(data)
 
 
 def _assert_project_root(path: Path) -> None:
@@ -96,15 +121,32 @@ def _write_html(path: Path, content: str) -> None:
         f.write(content)
 
 
-def _gen_index_html(ctx: _BuildContext) -> None:
+def _page_fn(fn: Callable[[_BuildContext], str]) -> Callable[[_BuildContext], None]:
+    @wraps(fn)
+    def wrapper(ctx: _BuildContext) -> None:
+        content = fn(ctx)
+        ctx.update_sha(content.encode())
+        _write_html(ctx.dist_index_path, content)
+
+    return wrapper
+
+
+@_page_fn
+def _gen_index_html(ctx: _BuildContext) -> str:
     logger.info(f"Generating {ctx.index_md_path} -> {ctx.dist_index_path}")
     md_content = _read_md(ctx.index_md_path)
     html_content = mistune.html(md_content)
-    page = ctx.base_template.render(
+    return ctx.base_template.render(
         title="George Danforth",
         content=html_content
     )
-    _write_html(ctx.dist_index_path, page)
+
+
+def _write_sha(ctx: _BuildContext) -> None:
+    sha = ctx.get_sha()
+    logger.info(f"SHA256: {sha}")
+    with open(ctx.sha_path, "w") as f:
+        f.write(sha)
 
 
 def build() -> None:
@@ -113,7 +155,7 @@ def build() -> None:
 
     logger.info(f"Starting build from {root_path}")
 
-    ctx = _BuildContext(root_path)
+    ctx = _BuildContext(root_path, sha256())
 
     logger.info(f"Setting up dist dir at {ctx.dist_path}")
     _clean_dist(ctx)
@@ -123,3 +165,7 @@ def build() -> None:
 
     logger.info("Generating pages")
     _gen_index_html(ctx)
+
+    _write_sha(ctx)
+
+    logger.info("Build complete.")
