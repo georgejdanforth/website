@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 INDEX_MD = "index.md"
 NOTES_MD = "notes.md"
+BASE_HTML = "base.html"
 
 
 class Hash(Protocol):
@@ -39,16 +40,12 @@ class _BuildContext:
         return self.root_path / "build"
 
     @cached_property
-    def template_path(self) -> Path:
-        return self.build_path / "html" / "template.html"
+    def assets_path(self) -> Path:
+        return self.root_path / "assets"
 
     @cached_property
-    def build_css_path(self) -> Path:
-        return self.build_path / "css"
-
-    @cached_property
-    def build_js_path(self) -> Path:
-        return self.build_path / "js"
+    def templates_path(self) -> Path:
+        return self.root_path / "templates"
 
     @cached_property
     def pages_path(self) -> Path:
@@ -60,7 +57,7 @@ class _BuildContext:
 
     @cached_property
     def base_template(self) -> Template:
-        with open(self.template_path) as f:
+        with open(self.templates_path / BASE_HTML) as f:
             return Template(f.read())
 
     @cached_property
@@ -116,17 +113,17 @@ def _write_html(path: Path, content: str) -> None:
 
 
 def _copy_assets(ctx: _BuildContext) -> None:
-    src_dirs: list[Path] = [ctx.build_css_path, ctx.build_js_path]
+    src_dirs: list[Path] = [ctx.assets_path]
     while src_dirs:
         src_dir = src_dirs.pop()
-        _ensure_dir(ctx.dist_path / src_dir.relative_to(ctx.build_path))
+        _ensure_dir(ctx.dist_path / src_dir.relative_to(ctx.assets_path))
         for src_path in src_dir.iterdir():
             if _is_dotfile(src_path):
                 continue
             if src_path.is_dir():
                 src_dirs.append(src_path)
             else:
-                dst_path = ctx.dist_path / src_path.relative_to(ctx.build_path)
+                dst_path = ctx.dist_path / src_path.relative_to(ctx.assets_path)
                 logger.info(f"Copying {src_path} -> {dst_path}")
                 shutil.copy(src_path, dst_path)
 
