@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 INDEX_MD = "index.md"
 NOTES_MD = "notes.md"
 BASE_HTML = "base.html"
+FRONT_MATTER_DELIM = "---"
 
 
 class Hash(Protocol):
@@ -101,10 +102,27 @@ def _is_md(path: Path) -> bool:
     return path.suffix == ".md"
 
 
-def _read_md(path: Path) -> str:
+def _parse_front_matter(src_path: Path, md_content: str) -> tuple[dict[str, str], str]:
+    front_matter = {}
+    lines = md_content.splitlines()
+    if lines[0] != FRONT_MATTER_DELIM:
+        raise ValueError(f"Page {src_path} is missing front matter")
+    i = 1
+    while lines[i] != FRONT_MATTER_DELIM:
+        line = lines[i]
+        key, value = line.split(":", 1)
+        front_matter[key.strip()] = value.strip()
+        i += 1
+
+    return front_matter, "\n".join(lines[i + 1:])
+
+
+def _read_md(path: Path) -> tuple[dict[str, str], str]:
     assert _is_md(path), f"Expected {path} to be a markdown file"
     with open(path) as f:
-        return f.read()
+        raw_content = f.read()
+
+    return _parse_front_matter(path, raw_content)
 
 
 def _write_html(path: Path, content: str) -> None:
@@ -130,11 +148,12 @@ def _copy_assets(ctx: _BuildContext) -> None:
 
 def _gen_page(ctx: _BuildContext, src_path: Path) -> None:
     dst_path = (ctx.dist_path / src_path.relative_to(ctx.pages_path)).with_name("index.html")
-    md_content = _read_md(src_path)
+    front_matter, md_content = _read_md(src_path)
     html_content = mistune.html(md_content)
+    print(front_matter)
     page = ctx.base_template.render(
-        # TODO: get title from front matter
-        title="foo",
+        # Require front matter to have a title. Intentionally error if it doesn't.
+        title=front_matter["title"],
         env=ctx.env.value,
         content=html_content
     )
