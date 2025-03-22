@@ -6,13 +6,15 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, Callable, Protocol, TYPE_CHECKING
 
+import mistune
+from jinja2 import Template
+
+from build.env import Env
+
 if TYPE_CHECKING:
     from _typeshed import ReadableBuffer
 else:
     ReadableBuffer = Any
-
-import mistune
-from jinja2 import Template
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +26,8 @@ class Hash(Protocol):
 
 @dataclass
 class _BuildContext:
+    env: Env
     root_path: Path
-    # Use Any here since _Hash is not available at runtime
     build_sha: Hash
 
     @cached_property
@@ -39,6 +41,10 @@ class _BuildContext:
     @cached_property
     def stylesheet_path(self) -> Path:
         return self.build_path / "css" / "styles.css"
+
+    @cached_property
+    def js_path(self) -> Path:
+        return self.build_path / "js"
 
     @cached_property
     def pages_path(self) -> Path:
@@ -59,6 +65,10 @@ class _BuildContext:
     @cached_property
     def dist_stylesheet_path(self) -> Path:
         return self.dist_css_path / "styles.css"
+
+    @cached_property
+    def dist_js_path(self) -> Path:
+        return self.dist_path / "js"
 
     @cached_property
     def dist_index_path(self) -> Path:
@@ -106,6 +116,11 @@ def _copy_stylesheet(ctx: _BuildContext) -> None:
     shutil.copy(ctx.stylesheet_path, ctx.dist_stylesheet_path)
 
 
+def _copy_js(ctx: _BuildContext) -> None:
+    # TODO: filter scripts by environment
+    shutil.copytree(ctx.js_path, ctx.dist_path / "js")
+
+
 def _is_md(path: Path) -> bool:
     return path.suffix == ".md"
 
@@ -138,6 +153,7 @@ def _gen_index_html(ctx: _BuildContext) -> str:
     html_content = mistune.html(md_content)
     return ctx.base_template.render(
         title="George Danforth",
+        env=ctx.env.value,
         content=html_content
     )
 
@@ -149,19 +165,20 @@ def _write_sha(ctx: _BuildContext) -> None:
         f.write(sha)
 
 
-def build() -> None:
+def build(env: Env) -> None:
     root_path = Path(".").resolve()
     _assert_project_root(root_path)
 
     logger.info(f"Starting build from {root_path}")
 
-    ctx = _BuildContext(root_path, sha256())
+    ctx = _BuildContext(env, root_path, sha256())
 
     logger.info(f"Setting up dist dir at {ctx.dist_path}")
     _clean_dist(ctx)
     _ensure_dir(ctx.dist_path)
     _ensure_dir(ctx.dist_css_path)
     _copy_stylesheet(ctx)
+    _copy_js(ctx)
 
     logger.info("Generating pages")
     _gen_index_html(ctx)

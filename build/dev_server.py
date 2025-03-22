@@ -8,6 +8,7 @@ import watchfiles
 
 from build.build import build
 from build.logging_config import configure_logging
+from build.env import Env
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ def _watch_dir(directory: Path, lock: LockType) -> None:
         for _ in watchfiles.watch(directory):
             with lock:
                 logger.info("Detected change in %s, rebuilding", directory)
-                build()
+                build(Env.dev)
     except KeyboardInterrupt:
         logger.info("Stopping watcher for %s", directory)
 
@@ -51,7 +52,7 @@ def _create_server(directory: Path, port: int = 8000) -> http.server.HTTPServer:
 
 
 def run(port: int) -> None:
-    build()
+    build(Env.dev)
 
     lock = Lock()
     build_watcher = _start_build_watcher(lock)

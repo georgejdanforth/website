@@ -3,6 +3,7 @@ import click
 from build.build import build as _build
 from build.dev_server import run
 from build.logging_config import configure_logging
+from build.env import Env
 
 # Configure logging
 configure_logging()
@@ -14,8 +15,10 @@ def cli():
 
 
 @cli.command()
-def build():
-    _build()
+@click.option("--env", type=click.Choice([e.value for e in Env]), default=Env.dev.value)
+def build(env: str):
+    _env = Env(env)
+    _build(_env)
 
 
 @cli.command()
