@@ -19,6 +19,10 @@ else:
 logger = logging.getLogger(__name__)
 
 
+INDEX_MD = "index.md"
+NOTES_MD = "notes.md"
+
+
 class Hash(Protocol):
     def update(self, data: ReadableBuffer, /) -> None: ...
     def hexdigest(self) -> str: ...
@@ -39,11 +43,11 @@ class _BuildContext:
         return self.build_path / "html" / "template.html"
 
     @cached_property
-    def stylesheet_path(self) -> Path:
-        return self.build_path / "css" / "styles.css"
+    def build_css_path(self) -> Path:
+        return self.build_path / "css"
 
     @cached_property
-    def js_path(self) -> Path:
+    def build_js_path(self) -> Path:
         return self.build_path / "js"
 
     @cached_property
@@ -51,28 +55,8 @@ class _BuildContext:
         return self.root_path / "pages"
 
     @cached_property
-    def index_md_path(self) -> Path:
-        return self.pages_path / "index.md"
-
-    @cached_property
     def dist_path(self) -> Path:
         return self.root_path / "dist"
-
-    @cached_property
-    def dist_css_path(self) -> Path:
-        return self.dist_path / "css"
-
-    @cached_property
-    def dist_stylesheet_path(self) -> Path:
-        return self.dist_css_path / "styles.css"
-
-    @cached_property
-    def dist_js_path(self) -> Path:
-        return self.dist_path / "js"
-
-    @cached_property
-    def dist_index_path(self) -> Path:
-        return self.dist_path / "index.html"
 
     @cached_property
     def base_template(self) -> Template:
@@ -112,13 +96,8 @@ def _clean_dist(ctx: _BuildContext) -> None:
         raise ValueError(f"Expected {ctx.dist_path} to be a directory")
 
 
-def _copy_stylesheet(ctx: _BuildContext) -> None:
-    shutil.copy(ctx.stylesheet_path, ctx.dist_stylesheet_path)
-
-
-def _copy_js(ctx: _BuildContext) -> None:
-    # TODO: filter scripts by environment
-    shutil.copytree(ctx.js_path, ctx.dist_path / "js")
+def _is_dotfile(path: Path) -> bool:
+    return path.name.startswith(".")
 
 
 def _is_md(path: Path) -> bool:
@@ -136,26 +115,61 @@ def _write_html(path: Path, content: str) -> None:
         f.write(content)
 
 
-def _page_fn(fn: Callable[[_BuildContext], str]) -> Callable[[_BuildContext], None]:
-    @wraps(fn)
-    def wrapper(ctx: _BuildContext) -> None:
-        content = fn(ctx)
-        ctx.update_sha(content.encode())
-        _write_html(ctx.dist_index_path, content)
+def _copy_assets(ctx: _BuildContext) -> None:
+    src_dirs: list[Path] = [ctx.build_css_path, ctx.build_js_path]
+    while src_dirs:
+        src_dir = src_dirs.pop()
+        _ensure_dir(ctx.dist_path / src_dir.relative_to(ctx.build_path))
+        for src_path in src_dir.iterdir():
+            if _is_dotfile(src_path):
+                continue
+            if src_path.is_dir():
+                src_dirs.append(src_path)
+            else:
+                dst_path = ctx.dist_path / src_path.relative_to(ctx.build_path)
+                logger.info(f"Copying {src_path} -> {dst_path}")
+                shutil.copy(src_path, dst_path)
 
-    return wrapper
 
-
-@_page_fn
-def _gen_index_html(ctx: _BuildContext) -> str:
-    logger.info(f"Generating {ctx.index_md_path} -> {ctx.dist_index_path}")
-    md_content = _read_md(ctx.index_md_path)
+def _gen_page(ctx: _BuildContext, src_path: Path) -> None:
+    dst_path = (ctx.dist_path / src_path.relative_to(ctx.pages_path)).with_name("index.html")
+    md_content = _read_md(src_path)
     html_content = mistune.html(md_content)
-    return ctx.base_template.render(
-        title="George Danforth",
+    page = ctx.base_template.render(
+        # TODO: get title from front matter
+        title="foo",
         env=ctx.env.value,
         content=html_content
     )
+
+    ctx.update_sha(page.encode())
+    logger.info(f"Generating {src_path} -> {dst_path}")
+    _write_html(dst_path, page)
+
+
+def _gen_pages(ctx: _BuildContext) -> None:
+    src_dirs = [ctx.pages_path]
+    while src_dirs:
+        src_dir = src_dirs.pop()
+        _ensure_dir(ctx.dist_path / src_dir.relative_to(ctx.pages_path))
+        files: list[Path] = []
+        for src_path in src_dir.iterdir():
+            if _is_dotfile(src_path):
+                continue
+            if src_path.is_dir():
+                src_dirs.append(src_path)
+            else:
+                files.append(src_path)
+
+        for src_path in files:
+            if src_path.name == INDEX_MD:
+                _gen_page(ctx, src_path)
+            elif src_path.name == NOTES_MD:
+                pass
+            else:
+                dst_path = ctx.dist_path / src_path.relative_to(ctx.pages_path)
+                logger.info(f"Copying {src_path} -> {dst_path}")
+                shutil.copy(src_path, dst_path)
 
 
 def _write_sha(ctx: _BuildContext) -> None:
@@ -175,13 +189,12 @@ def build(env: Env) -> None:
 
     logger.info(f"Setting up dist dir at {ctx.dist_path}")
     _clean_dist(ctx)
-    _ensure_dir(ctx.dist_path)
-    _ensure_dir(ctx.dist_css_path)
-    _copy_stylesheet(ctx)
-    _copy_js(ctx)
+
+    logger.info("Copying assets")
+    _copy_assets(ctx)
 
     logger.info("Generating pages")
-    _gen_index_html(ctx)
+    _gen_pages(ctx)
 
     _write_sha(ctx)
 
