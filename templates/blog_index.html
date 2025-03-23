@@ -1,14 +1,15 @@
 <div class="blog-post-list">
-  {% if blog_posts %}
-    <ul>
-      {% for post in blog_posts|sort(attribute='date', reverse=True) %}
-        <li>
-          <span class="date">{{ post.date }}</span>
-          <a href="{{ post.href }}">{{ post.title }}</a>
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p>No blog posts available.</p>
-  {% endif %}
+	{% if blog_posts %}
+		<ul>
+			{% for post in blog_posts|sort(attribute='date', reverse=True) %}
+				<li>
+					<span class="date"><i>{{ post.date }}</i></span>
+					|
+					<a href="{{ post.href }}">{{ post.title }}</a>
+				</li>
+			{% endfor %}
+		</ul>
+	{% else %}
+		<p>No blog posts available.</p>
+	{% endif %}
 </div>
