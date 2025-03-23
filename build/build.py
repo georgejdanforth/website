@@ -1,10 +1,10 @@
 import logging
 import shutil
 from dataclasses import dataclass
-from functools import cached_property, wraps
+from functools import cached_property
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Callable, Protocol, TYPE_CHECKING
+from typing import Any, Optional, Protocol, TYPE_CHECKING
 
 import mistune
 from jinja2 import Template
@@ -150,7 +150,6 @@ def _gen_page(ctx: _BuildContext, src_path: Path) -> None:
     dst_path = (ctx.dist_path / src_path.relative_to(ctx.pages_path)).with_name("index.html")
     front_matter, md_content = _read_md(src_path)
     html_content = mistune.html(md_content)
-    print(front_matter)
     page = ctx.base_template.render(
         # Require front matter to have a title. Intentionally error if it doesn't.
         title=front_matter["title"],
@@ -163,29 +162,33 @@ def _gen_page(ctx: _BuildContext, src_path: Path) -> None:
     _write_html(dst_path, page)
 
 
-def _gen_pages(ctx: _BuildContext) -> None:
-    src_dirs = [ctx.pages_path]
-    while src_dirs:
-        src_dir = src_dirs.pop()
-        _ensure_dir(ctx.dist_path / src_dir.relative_to(ctx.pages_path))
-        files: list[Path] = []
-        for src_path in src_dir.iterdir():
-            if _is_dotfile(src_path):
-                continue
-            if src_path.is_dir():
-                src_dirs.append(src_path)
-            else:
-                files.append(src_path)
+def _gen_pages(ctx: _BuildContext, path: Optional[Path] = None, recurse: bool = True) -> None:
+    if path is None:
+        path = ctx.pages_path
 
-        for src_path in files:
-            if src_path.name == INDEX_MD:
-                _gen_page(ctx, src_path)
-            elif src_path.name == NOTES_MD:
-                pass
-            else:
-                dst_path = ctx.dist_path / src_path.relative_to(ctx.pages_path)
-                logger.info(f"Copying {src_path} -> {dst_path}")
-                shutil.copy(src_path, dst_path)
+    assert path.is_dir(), f"Expected {path} to be a directory"
+
+    dst_path = ctx.dist_path / path.relative_to(ctx.pages_path)
+    _ensure_dir(dst_path)
+
+    files: list[Path] = []
+    for src_path in path.iterdir():
+        if _is_dotfile(src_path):
+            continue
+        if src_path.is_dir() and recurse:
+            _gen_pages(ctx, src_path)
+        if src_path.is_file():
+            files.append(src_path)
+
+    for src_path in files:
+        if src_path.name == INDEX_MD:
+            _gen_page(ctx, src_path)
+        elif src_path.name == NOTES_MD:
+            pass
+        else:
+            dst_path = ctx.dist_path / src_path.relative_to(ctx.pages_path)
+            logger.info(f"Copying {src_path} -> {dst_path}")
+            shutil.copy(src_path, dst_path)
 
 
 def _write_sha(ctx: _BuildContext) -> None:
