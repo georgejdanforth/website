@@ -1,7 +1,6 @@
 import logging
 import http.server
-from multiprocessing import Lock, Process
-from multiprocessing.synchronize import Lock as LockType
+from multiprocessing import Process
 from pathlib import Path
 
 import watchfiles
@@ -13,29 +12,27 @@ from build.env import Env
 logger = logging.getLogger(__name__)
 
 
-def _watch_dir(directory: Path, lock: LockType) -> None:
+def _watch_dirs() -> None:
     configure_logging()
+
+    dirs = [
+        Path("build").resolve(),
+        Path("assets").resolve(),
+        Path("templates").resolve(),
+        Path("pages").resolve(),
+    ]
     
-    logger.info("Watching %s for changes", directory)
+    logger.info("Watching for changes")
     try:
-        for _ in watchfiles.watch(directory):
-            with lock:
-                logger.info("Detected change in %s, rebuilding", directory)
-                build(Env.dev)
+        for _ in watchfiles.watch(*dirs):
+            logger.info("Detected change. Rebuilding...")
+            build(Env.dev)
     except KeyboardInterrupt:
-        logger.info("Stopping watcher for %s", directory)
+        logger.info("Stopping watcher")
 
 
-def _start_build_watcher(lock: LockType) -> Process:
-    build_dir = Path("build").resolve()
-    process = Process(target=_watch_dir, args=(build_dir, lock))
-    process.start()
-    return process
-
-
-def _start_pages_watcher(lock: LockType) -> Process:
-    pages_dir = Path("pages").resolve()
-    process = Process(target=_watch_dir, args=(pages_dir, lock))
+def _start_watcher() -> Process:
+    process = Process(target=_watch_dirs, args=())
     process.start()
     return process
 
@@ -54,9 +51,7 @@ def _create_server(directory: Path, port: int = 8000) -> http.server.HTTPServer:
 def run(port: int) -> None:
     build(Env.dev)
 
-    lock = Lock()
-    build_watcher = _start_build_watcher(lock)
-    pages_watcher = _start_pages_watcher(lock)
+    watcher = _start_watcher()
 
     dist_path = Path("dist").resolve()
     server = _create_server(dist_path, port)
@@ -65,5 +60,4 @@ def run(port: int) -> None:
         logger.info("Starting server on http://localhost:%d", port)
         server.serve_forever()
     except KeyboardInterrupt:
-        build_watcher.join()
-        pages_watcher.join()
+        watcher.join()
