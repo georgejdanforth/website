@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 INDEX_MD = "index.md"
 NOTES_MD = "notes.md"
 BASE_HTML = "base.html"
+BLOG_INDEX_HTML = "blog_index.html"
 FRONT_MATTER_DELIM = "---"
 DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -35,13 +36,13 @@ class _PageType(enum.Enum):
 
 @dataclass
 class _PageMetadata:
-    dir_path: Path
+    href: str
     page_type: _PageType
     title: str
     date: Optional[str] = None
 
     def __post_init__(self) -> None:
-        assert self.dir_path.is_dir(), f"Expected {self.dir_path} to be a directory"
+        assert self.href, "Page must have an href"
         assert self.title, "Page must have a title"
         if self.page_type == _PageType.blog_post:
             assert self.date is not None, "Blog post must have a date"
@@ -87,6 +88,11 @@ class _BuildContext:
     @cached_property
     def base_template(self) -> Template:
         with open(self.templates_path / BASE_HTML) as f:
+            return Template(f.read())
+
+    @property
+    def blog_index_template(self) -> Template:
+        with open(self.templates_path / BLOG_INDEX_HTML) as f:
             return Template(f.read())
 
     @cached_property
@@ -179,7 +185,7 @@ def _gen_page(ctx: _BuildContext, src_path: Path) -> None:
 
     front_matter, md_content = _read_md(src_path)
     page_meta = _PageMetadata(
-        dir_path=src_path.parent,
+        href = f"/{src_path.parent.relative_to(ctx.pages_path).as_posix()}/",
         page_type=_PageType(front_matter["page_type"]),
         title=front_matter["title"],
         date=front_matter.get("date"),
@@ -189,11 +195,15 @@ def _gen_page(ctx: _BuildContext, src_path: Path) -> None:
         ctx.blog_posts.append(page_meta)
 
     html_content = mistune.html(md_content)
+    assert isinstance(html_content, str)
+    if src_path.parent == ctx.blog_path:
+        html_content += ctx.blog_index_template.render(blog_posts=ctx.blog_posts)
 
     page = ctx.base_template.render(
         # Require front matter to have a title. Intentionally error if it doesn't.
-        title=front_matter["title"],
+        title=page_meta.title,
         env=ctx.env.value,
+        date=page_meta.date,
         content=html_content
     )
 

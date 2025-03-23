@@ -25,6 +25,9 @@
 		</header>
 		<div class="content-wrapper">
 			<div class="container">
+				{% if date %}
+					<div id="date"><i>{{ date }}</i></div>
+				{% endif %}
 				<main>
 					{{ content }}
 				</main>
