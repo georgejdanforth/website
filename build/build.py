@@ -8,8 +8,11 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, Optional, Protocol, TYPE_CHECKING
 
-import mistune
 from jinja2 import Template
+from mistune import HTMLRenderer, create_markdown
+from pygments import highlight
+from pygments.formatters import HtmlFormatter
+from pygments.lexers import get_lexer_by_name
 
 from build.env import Env
 
@@ -27,6 +30,20 @@ BASE_HTML = "base.html"
 BLOG_INDEX_HTML = "blog_index.html"
 FRONT_MATTER_DELIM = "---"
 DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+class _HTMLRenderer(HTMLRenderer):
+    def block_code(self, code: str, info: Optional[str] = "") -> str:
+        if not info:
+            return super().block_code(code, info)
+
+        lang = info.split(None, 1)[0]
+        lexer = get_lexer_by_name(lang, stripall=True)
+        formatter = HtmlFormatter(style="gruvbox-dark")
+        return highlight(code, lexer, formatter)
+
+
+_markdown = create_markdown(renderer=_HTMLRenderer())
 
 
 class _PageType(enum.Enum):
@@ -194,7 +211,7 @@ def _gen_page(ctx: _BuildContext, src_path: Path) -> None:
     if page_meta.page_type == _PageType.blog_post:
         ctx.blog_posts.append(page_meta)
 
-    html_content = mistune.html(md_content)
+    html_content = _markdown(md_content)
     assert isinstance(html_content, str)
     if src_path.parent == ctx.blog_path:
         html_content += ctx.blog_index_template.render(blog_posts=ctx.blog_posts)
