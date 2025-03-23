@@ -268,7 +268,7 @@ def _write_sha(ctx: _BuildContext) -> None:
 
 def build(env: Env) -> None:
     root_path = Path(".").resolve()
-    _assert_project_root(root_path)
+    _assert_project_root(env, root_path)
 
     logger.info(f"Starting build from {root_path}")
 
