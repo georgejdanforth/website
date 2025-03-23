@@ -1,4 +1,5 @@
 ---
+page_type: index
 title: George Danforth
 ---
 # Hello!

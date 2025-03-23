@@ -1,6 +1,8 @@
 import logging
+import re
 import shutil
-from dataclasses import dataclass
+import enum
+from dataclasses import dataclass, field
 from functools import cached_property
 from hashlib import sha256
 from pathlib import Path
@@ -23,6 +25,27 @@ INDEX_MD = "index.md"
 NOTES_MD = "notes.md"
 BASE_HTML = "base.html"
 FRONT_MATTER_DELIM = "---"
+DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+class _PageType(enum.Enum):
+    index = "index"
+    blog_post = "blog_post"
+
+
+@dataclass
+class _PageMetadata:
+    dir_path: Path
+    page_type: _PageType
+    title: str
+    date: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        assert self.dir_path.is_dir(), f"Expected {self.dir_path} to be a directory"
+        assert self.title, "Page must have a title"
+        if self.page_type == _PageType.blog_post:
+            assert self.date is not None, "Blog post must have a date"
+            assert DATE_RE.match(self.date), "Blog post date must be in the format YYYY-MM-DD"
 
 
 class Hash(Protocol):
@@ -35,6 +58,7 @@ class _BuildContext:
     env: Env
     root_path: Path
     build_sha: Hash
+    blog_posts: list[_PageMetadata] = field(default_factory=list)
 
     @cached_property
     def build_path(self) -> Path:
@@ -51,6 +75,10 @@ class _BuildContext:
     @cached_property
     def pages_path(self) -> Path:
         return self.root_path / "pages"
+
+    @cached_property
+    def blog_path(self) -> Path:
+        return self.pages_path / "blog"
 
     @cached_property
     def dist_path(self) -> Path:
@@ -148,8 +176,20 @@ def _copy_assets(ctx: _BuildContext) -> None:
 
 def _gen_page(ctx: _BuildContext, src_path: Path) -> None:
     dst_path = (ctx.dist_path / src_path.relative_to(ctx.pages_path)).with_name("index.html")
+
     front_matter, md_content = _read_md(src_path)
+    page_meta = _PageMetadata(
+        dir_path=src_path.parent,
+        page_type=_PageType(front_matter["page_type"]),
+        title=front_matter["title"],
+        date=front_matter.get("date"),
+    )
+
+    if page_meta.page_type == _PageType.blog_post:
+        ctx.blog_posts.append(page_meta)
+
     html_content = mistune.html(md_content)
+
     page = ctx.base_template.render(
         # Require front matter to have a title. Intentionally error if it doesn't.
         title=front_matter["title"],
