@@ -123,9 +123,10 @@ class _BuildContext:
         self.build_sha.update(data)
 
 
-def _assert_project_root(path: Path) -> None:
+def _assert_project_root(env: Env, path: Path) -> None:
+    expected_path_name = "website" if env == Env.dev else "repo"
     # TODO: also check for some file that should be in the project root
-    if path.name != "website":
+    if path.name != expected_path_name:
         raise ValueError("Not in project root")
 
 
