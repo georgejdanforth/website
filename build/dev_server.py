@@ -3,8 +3,6 @@ import http.server
 from multiprocessing import Process
 from pathlib import Path
 
-import watchfiles
-
 from build.build import build
 from build.logging_config import configure_logging
 from build.env import Env
@@ -13,6 +11,9 @@ logger = logging.getLogger(__name__)
 
 
 def _watch_dirs() -> None:
+    # Use dynamic import so that build doesn't fail when watchfiles isn't installed
+    import watchfiles
+
     configure_logging()
 
     dirs = [
