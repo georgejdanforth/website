@@ -1,0 +1,4 @@
+#! /bin/bash
+pip install -r requireents.txt
+python -m build build --env prod
+
