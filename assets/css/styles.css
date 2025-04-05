@@ -13,6 +13,20 @@
   --gray: #928374;
 }
 
+@font-face {
+  font-family: 'Open Sans';
+  src: url('fonts/OpenSans-VariableFont_wdth,wght.ttf') format('truetype');
+  font-weight: 100 900; /* because it's a variable font */
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Open Sans';
+  src: url('fonts/OpenSans-Italic-VariableFont_wdth,wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: italic;
+}
+
 html {
   height: 100%;
 }
@@ -20,7 +34,7 @@ html {
 body {
   background-color: var(--bg);
   color: var(--fg);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Open Sans', sans-serif;
   margin: 0;
   padding: 0;
   line-height: 1.6;
@@ -37,19 +51,13 @@ body {
 
 @media (min-width: 768px) {
   .container {
-    width: 75%;
+    width: 512px;
   }
 }
 
 @media (min-width: 1024px) {
   .container {
-    width: 60%;
-  }
-}
-
-@media (min-width: 1440px) {
-  .container {
-    width: 33.333%;
+    width: 768px;
   }
 }
 
@@ -74,19 +82,13 @@ header {
 
 @media (min-width: 768px) {
   .header-content {
-    width: 75%;
+    width: 512px;
   }
 }
 
 @media (min-width: 1024px) {
   .header-content {
-    width: 60%;
-  }
-}
-
-@media (min-width: 1440px) {
-  .header-content {
-    width: 33.333%;
+    width: 768px;
   }
 }
 

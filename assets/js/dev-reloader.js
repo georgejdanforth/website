@@ -1,7 +1,7 @@
 var sha256 = null;
 
 var intervalId = setInterval(() => {
-  fetch("/sha256.txt")
+  fetch("/sha256.txt", {cache: "no-store"})
     .then(response => {
       if (!response.ok) {
         return null;
