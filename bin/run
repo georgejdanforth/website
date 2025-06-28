@@ -1,2 +1,2 @@
 #! /bin/bash
-python -m build serve
+uv run -m build serve

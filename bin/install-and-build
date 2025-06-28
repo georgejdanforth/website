@@ -1,4 +1,5 @@
 #! /bin/bash
-pip install -r requirements.txt
-python -m build build --env prod
+pipx install uv
+uv sync
+uv run -m build build --env prod
 

@@ -1,2 +1,2 @@
 #! /bin/bash
-python -m build build --env "${1:-dev}"
+uv run -m build build --env "${1:-dev}"
